@@ -440,6 +440,39 @@ struct BodyWrapper {
 // HELPER FUNCTIONS
 // ================================================================================================
 
+pub fn group_vector_elements_2<T, const N: usize>(source: Vec<T>) -> Vec<[T; N]> {
+    assert_eq!(
+        source.len() % N,
+        0,
+        "source length must be divisible by {}, but was {}",
+        N,
+        source.len()
+    );
+
+    // Capacity of the new vector
+    let capacity = source.len() / N;
+    let mut result = Vec::with_capacity(capacity);
+
+    // SAFETY: We ensure the source length is exactly divisible by N
+    // Convert Vec<T> into Vec<[T; N]>
+    unsafe {
+        // Convert source into a raw pointer for further manipulation
+        let mut source_ptr = source.as_ptr();
+        std::mem::forget(source); // Avoid destructor being called
+
+        for _ in 0..capacity {
+            // Point to an array of N elements. We advance by N each iteration.
+            let array_ptr = source_ptr as *const [T; N];
+            // Copy the array. This avoids aliasing issues by not modifying source_ptr directly.
+            let array = std::ptr::read(array_ptr);
+            result.push(array);
+            source_ptr = source_ptr.add(N); // Move the pointer by N elements
+        }
+    }
+
+    result
+}
+
 fn combine_blocks(mut blocks: Vec<CodeBlock>) -> CodeBlock {
     debug_assert!(!blocks.is_empty(), "cannot combine empty block list");
     // merge consecutive Span blocks.
@@ -469,7 +502,7 @@ fn combine_blocks(mut blocks: Vec<CodeBlock>) -> CodeBlock {
 
         let mut grouped_blocks = Vec::new();
         core::mem::swap(&mut blocks, &mut grouped_blocks);
-        let mut grouped_blocks = group_vector_elements::<CodeBlock, 2>(grouped_blocks);
+        let mut grouped_blocks = group_vector_elements_2::<CodeBlock, 2>(grouped_blocks);
         grouped_blocks.drain(0..).for_each(|pair| {
             blocks.push(CodeBlock::new_join(pair));
         });
